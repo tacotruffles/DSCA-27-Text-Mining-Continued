@@ -5,45 +5,200 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library('reshape2')
 library('tidyverse')
 library('tidytext')
+library('wordcloud') #install.packages('wordcloud')
 data(stop_words)
+# install.packages('textdata')
+# pay attention to console, this could be requiring a selection
 ```
 
-
-I want to compare usage of certain words in Fox News vs MSNBC tweets. How can we go about that using what we learned in the previous class?
-```{r}
-raw_dat = read_csv('tweet_data.csv') 
-
-dat = raw_dat %>% 
-  filter(screen_name %in% c('MSNBC', 'FoxNews')) %>%
-  select(screen_name, full_text)
-
-tweet_words = dat %>%
-  mutate(full_text = gsub("\\s?(f|ht)(tp)(s?)(://)([^\\.]*)[\\.|/](\\S*)", "", full_text)) %>%
-  unnest_tokens(word, full_text)
-
-tweet_words_clean = tweet_words %>%
-  group_by(screen_name) %>%
-  anti_join(stop_words)
-```
-
+Example directly from: <https://www.tidytextmining.com/sentiment.html>
 
 ```{r}
-x = plot_data %>% filter(screen_name == 'MSNBC') %>% select(word, proportion)
-y = plot_data %>% filter(screen_name == 'FoxNews')  %>% select(word, proportion)
+library(janeaustenr)
+library(dplyr)
+library(stringr)
 
-z = x %>% inner_join(y, by = 'word') 
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", 
+                                                 ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
 
-z %>%
-  ggplot(aes(x = proportion.x, y = proportion.y)) + 
-  geom_jitter() + 
-  geom_text(aes(label = word))
+head(tidy_books)
 ```
 
 
 
 ```{r}
-cor(z$proportion.x, z$proportion.y)
+nrc_joy <- get_sentiments("nrc") %>% 
+  filter(sentiment == "joy")
+
+tidy_books %>%
+  filter(book == "Emma") %>%
+  inner_join(nrc_joy) %>%
+  count(word, sort = TRUE)
+```
+
+
+```{r}
+jane_austen_sentiment <- tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+head(jane_austen_sentiment)
+```
+
+```{r}
+ggplot(jane_austen_sentiment, aes(index, sentiment, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+```
+
+
+
+```{r}
+pride_prejudice <- tidy_books %>% 
+  filter(book == "Pride & Prejudice")
+
+pride_prejudice
+```
+
+
+```{r}
+afinn <- pride_prejudice %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(index = linenumber %/% 80) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(method = "AFINN")
+
+head(afinn)
+```
+
+```{r}
+bing_and_nrc <- bind_rows(pride_prejudice %>% 
+                            inner_join(get_sentiments("bing")) %>%
+                            mutate(method = "Bing et al."),
+                          pride_prejudice %>% 
+                            inner_join(get_sentiments("nrc") %>% 
+                                         filter(sentiment %in% c("positive", 
+                                                                 "negative"))) %>%
+                            mutate(method = "NRC")) %>%
+  count(method, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+head(bing_and_nrc)
+```
+
+```{r}
+bind_rows(afinn, 
+          bing_and_nrc) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+```
+
+
+```{r}
+get_sentiments("nrc") %>% 
+     filter(sentiment %in% c("positive", 
+                             "negative")) %>% 
+  count(sentiment)
+```
+
+
+```{r}
+get_sentiments("bing") %>% 
+  count(sentiment)
+```
+
+
+```{r}
+bing_word_counts <- tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+bing_word_counts
+```
+
+
+```{r}
+bing_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
+
+
+```{r}
+tidy_books %>%
+  anti_join(stop_words) %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+```
+
+
+```{r}
+tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("gray20", "gray80"),
+                   max.words = 100)
+```
+
+
+```{r}
+PandP_sentences <- tibble(text = prideprejudice) %>% 
+  unnest_tokens(sentence, text, token = "sentences")
+
+head(PandP_sentences)
+```
+
+```{r}
+austen_chapters <- austen_books() %>%
+  group_by(book) %>%
+  unnest_tokens(chapter, text, token = "regex", 
+                pattern = "Chapter|CHAPTER [\\dIVXLC]") %>%
+  ungroup()
+
+austen_chapters %>% 
+  group_by(book) %>% 
+  summarise(chapters = n())
+```
+
+
+```{r}
+bingnegative <- get_sentiments("bing") %>% 
+  filter(sentiment == "negative")
+
+wordcounts <- tidy_books %>%
+  group_by(book, chapter) %>%
+  summarize(words = n())
+
+tidy_books %>%
+  semi_join(bingnegative) %>%
+  group_by(book, chapter) %>%
+  summarize(negativewords = n()) %>%
+  left_join(wordcounts, by = c("book", "chapter")) %>%
+  mutate(ratio = negativewords/words) %>%
+  filter(chapter != 0) %>%
+  top_n(1) %>%
+  ungroup()
 ```
 

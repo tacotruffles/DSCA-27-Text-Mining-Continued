@@ -1,0 +1,88 @@
+---
+title: "In Class / Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('tidyverse')
+library('tidytext')
+data(stop_words)
+# install.packages('textdata')
+# pay attention to console, this could be requiring a selection
+```
+
+
+Democratic candidate comparison and sentiment analysis.
+
+```{r}
+raw_dat = read_csv('tweet_data.csv') 
+
+dat = raw_dat %>% 
+#  filter(screen_name %in% c('MSNBC', 'FoxNews')) %>%
+  select(screen_name, full_text)
+
+tweet_words = dat %>%
+  mutate(full_text = gsub("\\s?(f|ht)(tp)(s?)(://)([^\\.]*)[\\.|/](\\S*)", "", full_text)) %>%
+  unnest_tokens(word, full_text)
+
+tweet_words_clean = tweet_words %>%
+  group_by(screen_name) %>%
+  anti_join(stop_words)
+
+head(tweet_words_clean)
+```
+
+
+```{r}
+afinn = get_sentiments("afinn") 
+head(afinn)
+```
+
+```{r}
+bing = get_sentiments('bing')
+head(bing)
+```
+
+
+```{r}
+nrc = get_sentiments('nrc')
+```
+
+```{r}
+loughran = get_sentiments('loughran')
+```
+
+
+
+Compare the different sentiment data sets, what do you find?
+
+```{r}
+tweet_words_clean %>%
+  inner_join(afinn, by = 'word')
+```
+
+
+
+
+
+
+POTUS data - downloaded from: <http://www.trumptwitterarchive.com/archive>
+
+```{r}
+raw_potus_dat = read_csv('potus_data.csv')
+
+potus_dat = raw_potus_dat %>%
+  filter(!is_retweet) %>%
+  select(-id_str, -source)
+
+tail(potus_dat, 20)
+```
+
+
+Chart the sentiment over time. Use any of the data provided in `potus_dat`. Is there anything worth noting?
+
+```{r}
+
+```
+
