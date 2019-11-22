@@ -1,0 +1,49 @@
+---
+title: "In Class"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('tidyverse')
+library('tidytext')
+data(stop_words)
+```
+
+
+I want to compare usage of certain words in Fox News vs MSNBC tweets. How can we go about that using what we learned in the previous class?
+```{r}
+raw_dat = read_csv('tweet_data.csv') 
+
+dat = raw_dat %>% 
+  filter(screen_name %in% c('MSNBC', 'FoxNews')) %>%
+  select(screen_name, full_text)
+
+tweet_words = dat %>%
+  mutate(full_text = gsub("\\s?(f|ht)(tp)(s?)(://)([^\\.]*)[\\.|/](\\S*)", "", full_text)) %>%
+  unnest_tokens(word, full_text)
+
+tweet_words_clean = tweet_words %>%
+  group_by(screen_name) %>%
+  anti_join(stop_words)
+```
+
+
+```{r}
+x = plot_data %>% filter(screen_name == 'MSNBC') %>% select(word, proportion)
+y = plot_data %>% filter(screen_name == 'FoxNews')  %>% select(word, proportion)
+
+z = x %>% inner_join(y, by = 'word') 
+
+z %>%
+  ggplot(aes(x = proportion.x, y = proportion.y)) + 
+  geom_jitter() + 
+  geom_text(aes(label = word))
+```
+
+
+
+```{r}
+cor(z$proportion.x, z$proportion.y)
+```
+
