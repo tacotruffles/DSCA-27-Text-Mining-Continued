@@ -88,7 +88,7 @@ bing_and_nrc <- bind_rows(pride_prejudice %>%
                           pride_prejudice %>% 
                             inner_join(get_sentiments("nrc") %>% 
                                          filter(sentiment %in% c("positive", 
-                                                                 "negative"))) %>%
+  "negative"))) %>%
                             mutate(method = "NRC")) %>%
   count(method, index = linenumber %/% 80, sentiment) %>%
   spread(sentiment, n, fill = 0) %>%

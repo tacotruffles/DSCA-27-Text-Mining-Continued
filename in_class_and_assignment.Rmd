@@ -64,9 +64,6 @@ tweet_words_clean %>%
 
 
 
-
-
-
 POTUS data - downloaded from: <http://www.trumptwitterarchive.com/archive>
 
 ```{r}
@@ -74,7 +71,9 @@ raw_potus_dat = read_csv('potus_data.csv')
 
 potus_dat = raw_potus_dat %>%
   filter(!is_retweet) %>%
-  select(-id_str, -source)
+  select(-id_str, -source) %>%
+  mutate(created_at = mdy_hms(created_at)) %>%
+  filter(created_at <= '2016-01-01', created_at >= '2012-01-01')
 
 tail(potus_dat, 20)
 ```
@@ -83,6 +82,40 @@ tail(potus_dat, 20)
 Chart the sentiment over time. Use any of the data provided in `potus_dat`. Is there anything worth noting?
 
 ```{r}
+data("stop_words")
+potus_tokens <- potus_dat %>%
+  select(created_at, text) %>%
+  mutate(text = gsub("\\s?(f|ht)(tp)(s?)(://)([^\\.]*)[\\.|/](\\S*)", "", text)) %>%
+  unnest_tokens(word, text, token="tweets") %>%
+  anti_join(stop_words, by="word") %>%
+  inner_join(get_sentiments("bing"), by ="word") %>%
+  group_by(created_at, sentiment) %>%
+  count() %>%
+  spread(key = sentiment, value = n, fill = 0)
+
+head(potus_tokens)
+```
+```{r}
+library('lubridate')
+potus_sent <- potus_tokens %>%
+  mutate(
+    sentiment = positive - negative,
+    date = as_date(created_at) #clean up dates
+    ) %>%
+  group_by(date) %>%
+  summarize(
+    total_sentiment = sum(sentiment),
+    mean_sentiment = mean(sentiment)
+  )
+ 
+head(potus_sent)
+```
+
+```{r}
+potus_sent %>%
+  ggplot(aes(x=date)) +
+  geom_line(aes(y=total_sentiment), col = 'blue', alpha = 0.6) +
+  geom_line(aes(y=mean_sentiment), col = 'red', alpha = 0.6)
 
 ```
 
